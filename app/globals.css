@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+/*
+  Algebra Arcade design tokens.
+  Light palette lives on bare :root. Dark values are redefined twice, per the
+  two ways dark can be reached: system preference (guarded so an explicit
+  light override wins) and the manual [data-theme="dark"] toggle.
+*/
+:root {
+  --surface: #f6f7fb;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eceef5;
+  --ink: #161b2e;
+  --ink-muted: #4b5170;
+  --ink-faint: #848aa8;
+  --border: #dcdfec;
+  --border-strong: #c3c8de;
+  --accent: #2f53e0;
+  --accent-strong: #223fb8;
+  --accent-contrast: #ffffff;
+  --accent-soft: #e7ecff;
+  --focus-ring: #2f53e0;
+  --danger: #c4342b;
+  --danger-soft: #fbe9e7;
+  --success: #1f8a5b;
+  --success-soft: #e4f6ed;
+
+  --radius-stage: 20px;
+  --radius-control: 12px;
+  --radius-chip: 10px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --font-math:
+    "STIX Two Text", "Cambria Math", Cambria, "Times New Roman", ui-serif, serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #0b0e1a;
+    --surface-raised: #131728;
+    --surface-sunken: #080a13;
+    --ink: #eef0fa;
+    --ink-muted: #a7acc9;
+    --ink-faint: #6b7092;
+    --border: #262b45;
+    --border-strong: #333a5c;
+    --accent: #7c93ff;
+    --accent-strong: #9db0ff;
+    --accent-contrast: #0b0e1a;
+    --accent-soft: #1c2246;
+    --focus-ring: #7c93ff;
+    --danger: #ff6b60;
+    --danger-soft: #33161a;
+    --success: #4ade94;
+    --success-soft: #103322;
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface: #0b0e1a;
+  --surface-raised: #131728;
+  --surface-sunken: #080a13;
+  --ink: #eef0fa;
+  --ink-muted: #a7acc9;
+  --ink-faint: #6b7092;
+  --border: #262b45;
+  --border-strong: #333a5c;
+  --accent: #7c93ff;
+  --accent-strong: #9db0ff;
+  --accent-contrast: #0b0e1a;
+  --accent-soft: #1c2246;
+  --focus-ring: #7c93ff;
+  --danger: #ff6b60;
+  --danger-soft: #33161a;
+  --success: #4ade94;
+  --success-soft: #103322;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus-ring: var(--focus-ring);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+
+  --radius-stage: var(--radius-stage);
+  --radius-control: var(--radius-control);
+  --radius-chip: var(--radius-chip);
+  --radius-pill: var(--radius-pill);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-math: var(--font-math);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    color-scheme: dark;
+  }
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Visible, non-clippable focus rings everywhere, per the accessibility requirements. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.font-math {
+  font-family: var(--font-math);
+  font-feature-settings: "tnum" 1;
+}
+
+.font-math .variable {
+  font-style: italic;
+}

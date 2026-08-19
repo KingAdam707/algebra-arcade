@@ -17,30 +17,31 @@ export function SessionHeader({
   combo: number;
 }) {
   return (
-    <header className="border-b border-border">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-ink">
-          Algebra Arcade
-        </Link>
+    <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
+      <Link href="/" className="shrink-0 text-lg font-semibold tracking-tight text-ink">
+        Algebra Arcade
+      </Link>
 
-        <div className="flex items-center gap-3 text-sm text-ink-muted">
-          <span className="rounded-pill border border-border bg-surface-sunken px-2.5 py-1 font-medium">
-            {DIFFICULTY_LABEL[difficulty]}
-          </span>
-          <span aria-live="polite">
-            Question {questionNumber} of {questionCount}
-          </span>
-          <ProgressTrack current={questionNumber} total={questionCount} />
-          {combo >= 3 && (
-            <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-medium text-accent-strong">
-              {combo} in a row
-            </span>
-          )}
-        </div>
-
-        <ThemeToggle />
+      <div className="min-w-[100px] flex-1 overflow-hidden rounded-control">
+        <SpaceInvadersScene variant="strip" />
       </div>
-      <SpaceInvadersScene variant="strip" />
+
+      <div className="flex shrink-0 items-center gap-3 text-sm text-ink-muted">
+        <span className="rounded-pill border border-border bg-surface-sunken px-2.5 py-1 font-medium">
+          {DIFFICULTY_LABEL[difficulty]}
+        </span>
+        <span aria-live="polite">
+          Question {questionNumber} of {questionCount}
+        </span>
+        <ProgressTrack current={questionNumber} total={questionCount} />
+        {combo >= 3 && (
+          <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-medium text-accent-strong">
+            {combo} in a row
+          </span>
+        )}
+      </div>
+
+      <ThemeToggle />
     </header>
   );
 }

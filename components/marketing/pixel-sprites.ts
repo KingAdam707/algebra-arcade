@@ -1,26 +1,6 @@
 /** Original pixel-grid sprites (not a reproduction of any specific game's artwork). '#' = filled pixel. */
 export type PixelGrid = readonly string[];
 
-export const INVADER_A: PixelGrid = [
-  "..####..",
-  ".######.",
-  "##.##.##",
-  "########",
-  "#.####.#",
-  "#.#..#.#",
-  "..#..#..",
-];
-
-export const INVADER_B: PixelGrid = [
-  "...##...",
-  "..####..",
-  ".######.",
-  "##.##.##",
-  "########",
-  "..#..#..",
-  ".#....#.",
-];
-
 export const SHIP: PixelGrid = ["....#....", "...###...", "...###...", ".#######.", "#########"];
 
 export function pixelGridWidth(grid: PixelGrid): number {

@@ -2,10 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "motion/react";
-import { INVADER_A, INVADER_B, SHIP, drawPixelGrid, pixelGridWidth, type PixelGrid } from "./pixel-sprites";
+import { SHIP, drawPixelGrid, pixelGridWidth } from "./pixel-sprites";
 import { pixelFont } from "./pixel-font";
 
-const SYMBOLS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "x", "y", "z", "a", "+", "-", "×", "÷"];
+/** The ship's ammunition: operators, hunting down the numbers and letters. */
+const OPERATORS = ["+", "-", "×", "÷"];
+/** The enemies: the numbers and letters an operator would act on. */
+const INVADER_GLYPHS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "x", "y", "z", "a", "b", "n"];
 
 const COLORS = {
   panelBg: "#080a14",
@@ -22,33 +25,62 @@ type VariantConfig = {
   cols: number;
   rows: number;
   heightPx: number;
-  pixelSize: number;
-  bulletIntervalMs: [number, number];
+  shipPixelSize: number;
+  invaderFontPx: number;
   bulletFontPx: number;
+  cellWidth: number;
+  cellHeight: number;
+  bulletIntervalMs: [number, number];
+  bulletSpeed: number;
   starCount: number;
 };
 
 const CONFIG: Record<Variant, VariantConfig> = {
-  hero: { cols: 6, rows: 3, heightPx: 260, pixelSize: 3, bulletIntervalMs: [450, 850], bulletFontPx: 13, starCount: 40 },
-  strip: { cols: 7, rows: 1, heightPx: 34, pixelSize: 1.5, bulletIntervalMs: [900, 1700], bulletFontPx: 8, starCount: 14 },
+  hero: {
+    cols: 6,
+    rows: 3,
+    heightPx: 260,
+    shipPixelSize: 3,
+    invaderFontPx: 16,
+    bulletFontPx: 14,
+    cellWidth: 62,
+    cellHeight: 42,
+    bulletIntervalMs: [450, 850],
+    bulletSpeed: 0.09,
+    starCount: 40,
+  },
+  strip: {
+    cols: 7,
+    rows: 1,
+    heightPx: 34,
+    shipPixelSize: 1.4,
+    invaderFontPx: 10,
+    bulletFontPx: 9,
+    cellWidth: 30,
+    cellHeight: 16,
+    bulletIntervalMs: [900, 1700],
+    bulletSpeed: 0.06,
+    starCount: 14,
+  },
 };
 
 type Bullet = { x: number; y: number; char: string; vy: number };
-type Invader = { col: number; row: number; alive: boolean; hitUntil: number; respawnAt: number };
+type Invader = { col: number; row: number; char: string; alive: boolean; hitUntil: number; respawnAt: number };
 type Star = { x: number; y: number; r: number };
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
-function pickSymbol(): string {
-  return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+function pickFrom(pool: readonly string[]): string {
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /**
- * Decorative 8-bit arcade scene: a ship fires algebra symbols upward at a
- * gently drifting formation of pixel invaders. Purely atmospheric branding
- * for "Algebra Arcade" — no game state, no interaction, always aria-hidden.
+ * Decorative 8-bit arcade scene: a ship fires operators (+ - x div) upward at
+ * a gently drifting formation of number/letter invaders. Purely atmospheric
+ * branding for "Algebra Arcade" — no game state, no interaction, always
+ * aria-hidden.
  */
 export function SpaceInvadersScene({ variant }: { variant: Variant }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -63,9 +95,6 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     if (!ctx) return;
 
     const config = CONFIG[variant];
-    const invaderSprites: PixelGrid[] = [INVADER_A, INVADER_B];
-    const invaderCellWidth = pixelGridWidth(INVADER_A) * config.pixelSize * 1.8;
-    const invaderCellHeight = INVADER_A.length * config.pixelSize * 1.6;
 
     let width = 0;
     const height = config.heightPx;
@@ -74,7 +103,7 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     const invaders: Invader[] = [];
     for (let row = 0; row < config.rows; row++) {
       for (let col = 0; col < config.cols; col++) {
-        invaders.push({ col, row, alive: true, hitUntil: 0, respawnAt: 0 });
+        invaders.push({ col, row, char: pickFrom(INVADER_GLYPHS), alive: true, hitUntil: 0, respawnAt: 0 });
       }
     }
 
@@ -103,13 +132,17 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
 
     function formationOrigin(time: number) {
       const drift = Math.sin(time / 1600) * (width * 0.08);
-      const startX = width / 2 - (config.cols * invaderCellWidth) / 2 + drift;
-      const startY = variant === "hero" ? 20 : (height - config.rows * invaderCellHeight) / 2;
+      const startX = width / 2 - (config.cols * config.cellWidth) / 2 + drift;
+      const startY = variant === "hero" ? 26 : (height - config.rows * config.cellHeight) / 2;
       return { startX, startY };
     }
 
     function shipX(time: number) {
       return width / 2 + Math.sin(time / 2400) * (width * 0.18);
+    }
+
+    function shipY() {
+      return variant === "hero" ? height - 34 : height - 14;
     }
 
     function drawFrame(time: number) {
@@ -123,29 +156,35 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
         ctx.fillRect(star.x * width, star.y * height, star.r, star.r);
       }
 
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
       const { startX, startY } = formationOrigin(time);
+      ctx.font = `${config.invaderFontPx}px ${pixelFont.style.fontFamily}, monospace`;
       for (const invader of invaders) {
-        const x = startX + invader.col * invaderCellWidth;
-        const y = startY + invader.row * invaderCellHeight;
         if (!invader.alive) continue;
-        const sprite = invaderSprites[(invader.col + invader.row) % invaderSprites.length];
-        const color = time < invader.hitUntil ? COLORS.invaderHit : COLORS.invader;
-        drawPixelGrid(ctx, sprite, x, y, config.pixelSize, color);
+        const x = startX + invader.col * config.cellWidth;
+        const y = startY + invader.row * config.cellHeight;
+        ctx.fillStyle = time < invader.hitUntil ? COLORS.invaderHit : COLORS.invader;
+        ctx.fillText(invader.char, x, y);
       }
 
       const sx = shipX(time);
-      const sy = variant === "hero" ? height - 34 : height - INVADER_A.length * config.pixelSize * 1.6;
-      drawPixelGrid(ctx, SHIP, sx - (pixelGridWidth(SHIP) * config.pixelSize) / 2, sy, config.pixelSize, COLORS.ship);
+      const sy = shipY();
+      drawPixelGrid(
+        ctx,
+        SHIP,
+        sx - (pixelGridWidth(SHIP) * config.shipPixelSize) / 2,
+        sy,
+        config.shipPixelSize,
+        COLORS.ship,
+      );
 
       ctx.font = `${config.bulletFontPx}px ${pixelFont.style.fontFamily}, monospace`;
       ctx.fillStyle = COLORS.bullet;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
       for (const bullet of bullets) {
         ctx.fillText(bullet.char, bullet.x, bullet.y);
       }
-
-      return { sx, sy };
     }
 
     function step(time: number) {
@@ -156,9 +195,7 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
       if (time > nextBulletAt) {
         const [min, max] = config.bulletIntervalMs;
         nextBulletAt = time + randomBetween(min, max);
-        const sx = shipX(time);
-        const sy = variant === "hero" ? height - 34 : height - INVADER_A.length * config.pixelSize * 1.6;
-        bullets.push({ x: sx, y: sy, char: pickSymbol(), vy: variant === "hero" ? 0.09 : 0.06 });
+        bullets.push({ x: shipX(time), y: shipY(), char: pickFrom(OPERATORS), vy: config.bulletSpeed });
       }
 
       const { startX, startY } = formationOrigin(time);
@@ -166,12 +203,12 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
         bullet.y -= bullet.vy * dt;
         if (bullet.y < startY - 4) return false;
 
-        const relativeCol = Math.round((bullet.x - startX) / invaderCellWidth);
+        const relativeCol = Math.round((bullet.x - startX) / config.cellWidth);
         if (relativeCol >= 0 && relativeCol < config.cols) {
           const target = invaders.find(
-            (inv) => inv.alive && inv.col === relativeCol && bullet.y <= startY + inv.row * invaderCellHeight + invaderCellHeight,
+            (inv) => inv.alive && inv.col === relativeCol && bullet.y <= startY + inv.row * config.cellHeight + config.cellHeight,
           );
-          if (target && bullet.y <= startY + target.row * invaderCellHeight + invaderCellHeight) {
+          if (target) {
             target.hitUntil = time + 90;
             target.alive = false;
             target.respawnAt = time + randomBetween(1200, 2600);
@@ -184,6 +221,7 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
       for (const invader of invaders) {
         if (!invader.alive && invader.respawnAt && time > invader.respawnAt) {
           invader.alive = true;
+          invader.char = pickFrom(INVADER_GLYPHS);
           invader.respawnAt = 0;
         }
       }

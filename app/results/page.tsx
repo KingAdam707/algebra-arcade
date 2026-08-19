@@ -53,16 +53,14 @@ export default function ResultsPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-8 px-4 py-10 sm:px-6">
-      <header className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <Link href="/" className="text-lg font-semibold tracking-tight text-ink">
-            Algebra Arcade
-          </Link>
-          <ThemeToggle />
-        </div>
-        <div className="overflow-hidden rounded-control">
+      <header className="flex flex-wrap items-center gap-3">
+        <Link href="/" className="shrink-0 text-lg font-semibold tracking-tight text-ink">
+          Algebra Arcade
+        </Link>
+        <div className="min-w-[100px] flex-1 overflow-hidden rounded-control">
           <SpaceInvadersScene variant="strip" />
         </div>
+        <ThemeToggle />
       </header>
 
       <main className="flex flex-col gap-8">

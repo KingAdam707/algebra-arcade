@@ -38,9 +38,19 @@ function readThemeColors(): Palette {
 
 type Variant = "hero" | "strip" | "side";
 
+/** Falling-rain behaviour, only used by the "side" variant. */
+type FallConfig = {
+  speedRange: [number, number];
+  gravity: number;
+  spawnIntervalMs: [number, number];
+  batchRange: [number, number];
+  hitRadiusX: number;
+  hitRadiusY: number;
+};
+
 type VariantConfig = {
   cols: number;
-  /** Fixed row count, or null to fill the measured height with as many rows as fit. */
+  /** Fixed row count for the grid variants, or null (unused) for the falling "side" variant. */
   rows: number | null;
   /** Fixed panel height in px, or null to fill the parent container's measured height. */
   heightPx: number | null;
@@ -54,6 +64,7 @@ type VariantConfig = {
   bulletIntervalMs: [number, number];
   bulletSpeed: number;
   starCount: number;
+  fall: FallConfig | null;
 };
 
 const CONFIG: Record<Variant, VariantConfig> = {
@@ -71,6 +82,7 @@ const CONFIG: Record<Variant, VariantConfig> = {
     bulletIntervalMs: [450, 850],
     bulletSpeed: 0.09,
     starCount: 40,
+    fall: null,
   },
   strip: {
     cols: 7,
@@ -86,6 +98,7 @@ const CONFIG: Record<Variant, VariantConfig> = {
     bulletIntervalMs: [900, 1700],
     bulletSpeed: 0.06,
     starCount: 14,
+    fall: null,
   },
   side: {
     cols: 1,
@@ -99,17 +112,32 @@ const CONFIG: Record<Variant, VariantConfig> = {
     cellHeight: 56,
     driftFactor: 0.35,
     bulletIntervalMs: [650, 1200],
-    bulletSpeed: 0.08,
+    bulletSpeed: 0.09,
     starCount: 24,
+    fall: {
+      speedRange: [0.045, 0.075],
+      gravity: 0.00003,
+      spawnIntervalMs: [1100, 2200],
+      batchRange: [1, 3],
+      hitRadiusX: 22,
+      hitRadiusY: 16,
+    },
   },
 };
 
 type Bullet = { x: number; y: number; char: string; vy: number };
-type Invader = { col: number; row: number; char: string; alive: boolean; hitUntil: number; respawnAt: number };
+/** Static formation invader, used by the hero/strip grid variants. */
+type GridInvader = { col: number; row: number; char: string; alive: boolean; hitUntil: number; respawnAt: number };
+/** Free-falling invader, used by the "side" variant: spawns at the top, falls under gravity, no formation. */
+type FallingInvader = { x: number; y: number; vy: number; char: string; hitUntil: number; dying: boolean; removeAt: number };
 type Star = { x: number; y: number; r: number };
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
+}
+
+function randomInt(min: number, max: number) {
+  return Math.floor(randomBetween(min, max + 1));
 }
 
 function pickFrom(pool: readonly string[]): string {
@@ -117,11 +145,13 @@ function pickFrom(pool: readonly string[]): string {
 }
 
 /**
- * Decorative 8-bit arcade scene: a ship fires operators (+ - x div) upward at
- * a gently drifting formation of number/letter invaders. Purely atmospheric
- * branding for "Algebra Arcade" — no game state, no interaction, always
- * aria-hidden. The "side" variant is seamless (no panel background or
- * border) and reads the app's live theme tokens instead of a fixed palette.
+ * Decorative 8-bit arcade scene: a ship fires operators (+ - x div) upward.
+ * Purely atmospheric branding for "Algebra Arcade" — no game state, no
+ * interaction, always aria-hidden. hero/strip show a gently drifting fixed
+ * formation of number/letter invaders in a self-contained dark panel. side
+ * is seamless (no panel background or border, live theme colours) and
+ * starts empty: invaders fall from the top under light gravity, a few at a
+ * time, at random positions — no formation.
  */
 export function SpaceInvadersScene({ variant }: { variant: Variant }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -136,19 +166,22 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     if (!ctx) return;
 
     const config = CONFIG[variant];
+    const isFalling = config.fall !== null;
     let colors: Palette = config.seamless ? readThemeColors() : PANEL_COLORS;
 
     let width = 0;
     let height = 0;
     let rows = config.rows ?? 6;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let invaders: Invader[] = [];
 
-    function buildInvaders() {
-      invaders = [];
+    let gridInvaders: GridInvader[] = [];
+    let fallingInvaders: FallingInvader[] = [];
+
+    function buildGridInvaders() {
+      gridInvaders = [];
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < config.cols; col++) {
-          invaders.push({ col, row, char: pickFrom(INVADER_GLYPHS), alive: true, hitUntil: 0, respawnAt: 0 });
+          gridInvaders.push({ col, row, char: pickFrom(INVADER_GLYPHS), alive: true, hitUntil: 0, respawnAt: 0 });
         }
       }
     }
@@ -183,12 +216,12 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
 
     let bullets: Bullet[] = [];
     let nextBulletAt = 0;
+    let nextSpawnAt = 0;
     let elapsed = 0;
     let rafId = 0;
 
-    function formationOrigin(time: number) {
-      const drift = Math.sin(time / 1600) * (width * config.driftFactor);
-      const startX = width / 2 - (config.cols * config.cellWidth) / 2 + drift;
+    function formationOrigin() {
+      const startX = width / 2 - (config.cols * config.cellWidth) / 2;
       const startY = variant === "strip" ? (height - rows * config.cellHeight) / 2 : 26;
       return { startX, startY };
     }
@@ -199,6 +232,22 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
 
     function shipY() {
       return variant === "strip" ? height - 14 : height - 34;
+    }
+
+    function spawnFallingBatch(fall: FallConfig) {
+      const count = randomInt(fall.batchRange[0], fall.batchRange[1]);
+      const margin = fall.hitRadiusX;
+      for (let i = 0; i < count; i++) {
+        fallingInvaders.push({
+          x: randomBetween(margin, Math.max(margin, width - margin)),
+          y: -randomBetween(0, 40),
+          vy: randomBetween(fall.speedRange[0], fall.speedRange[1]),
+          char: pickFrom(INVADER_GLYPHS),
+          hitUntil: 0,
+          dying: false,
+          removeAt: 0,
+        });
+      }
     }
 
     function drawFrame(time: number) {
@@ -216,15 +265,22 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
 
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-
-      const { startX, startY } = formationOrigin(time);
       ctx.font = `${config.invaderFontPx}px ${pixelFont.style.fontFamily}, monospace`;
-      for (const invader of invaders) {
-        if (!invader.alive) continue;
-        const x = startX + invader.col * config.cellWidth;
-        const y = startY + invader.row * config.cellHeight;
-        ctx.fillStyle = time < invader.hitUntil ? colors.invaderHit : colors.invader;
-        ctx.fillText(invader.char, x, y);
+
+      if (isFalling) {
+        for (const invader of fallingInvaders) {
+          ctx.fillStyle = time < invader.hitUntil ? colors.invaderHit : colors.invader;
+          ctx.fillText(invader.char, invader.x, invader.y);
+        }
+      } else {
+        const { startX, startY } = formationOrigin();
+        for (const invader of gridInvaders) {
+          if (!invader.alive) continue;
+          const x = startX + invader.col * config.cellWidth;
+          const y = startY + invader.row * config.cellHeight;
+          ctx.fillStyle = time < invader.hitUntil ? colors.invaderHit : colors.invader;
+          ctx.fillText(invader.char, x, y);
+        }
       }
 
       const sx = shipX(time);
@@ -245,25 +301,48 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
       }
     }
 
-    function step(time: number) {
-      if (elapsed === 0) elapsed = time;
-      const dt = time - elapsed;
-      elapsed = time;
-
-      if (time > nextBulletAt) {
-        const [min, max] = config.bulletIntervalMs;
-        nextBulletAt = time + randomBetween(min, max);
-        bullets.push({ x: shipX(time), y: shipY(), char: pickFrom(OPERATORS), vy: config.bulletSpeed });
+    function stepFalling(time: number, dt: number, fall: FallConfig) {
+      if (time > nextSpawnAt) {
+        const [min, max] = fall.spawnIntervalMs;
+        nextSpawnAt = time + randomBetween(min, max);
+        spawnFallingBatch(fall);
       }
 
-      const { startX, startY } = formationOrigin(time);
+      fallingInvaders = fallingInvaders.filter((invader) => {
+        if (invader.dying) return time <= invader.removeAt;
+        invader.vy += fall.gravity * dt;
+        invader.y += invader.vy * dt;
+        return invader.y < height + 30;
+      });
+
+      bullets = bullets.filter((bullet) => {
+        bullet.y -= bullet.vy * dt;
+        if (bullet.y < -10) return false;
+        const target = fallingInvaders.find(
+          (inv) =>
+            !inv.dying &&
+            Math.abs(inv.x - bullet.x) < fall.hitRadiusX &&
+            Math.abs(inv.y - bullet.y) < fall.hitRadiusY,
+        );
+        if (target) {
+          target.dying = true;
+          target.hitUntil = time + 120;
+          target.removeAt = time + 120;
+          return false;
+        }
+        return true;
+      });
+    }
+
+    function stepGrid(time: number, dt: number) {
+      const { startX, startY } = formationOrigin();
       bullets = bullets.filter((bullet) => {
         bullet.y -= bullet.vy * dt;
         if (bullet.y < startY - 4) return false;
 
         const relativeCol = Math.round((bullet.x - startX) / config.cellWidth);
         if (relativeCol >= 0 && relativeCol < config.cols) {
-          const target = invaders.find(
+          const target = gridInvaders.find(
             (inv) => inv.alive && inv.col === relativeCol && bullet.y <= startY + inv.row * config.cellHeight + config.cellHeight,
           );
           if (target) {
@@ -276,12 +355,32 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
         return true;
       });
 
-      for (const invader of invaders) {
+      for (const invader of gridInvaders) {
         if (!invader.alive && invader.respawnAt && time > invader.respawnAt) {
           invader.alive = true;
           invader.char = pickFrom(INVADER_GLYPHS);
           invader.respawnAt = 0;
         }
+      }
+    }
+
+    function step(time: number) {
+      if (elapsed === 0) elapsed = time;
+      // Clamp dt so a backgrounded/throttled tab (alt-tab, minimized, OS sleep) can't
+      // deliver one huge frame that teleports invaders past their removal bounds.
+      const dt = Math.min(time - elapsed, 50);
+      elapsed = time;
+
+      if (time > nextBulletAt) {
+        const [min, max] = config.bulletIntervalMs;
+        nextBulletAt = time + randomBetween(min, max);
+        bullets.push({ x: shipX(time), y: shipY(), char: pickFrom(OPERATORS), vy: config.bulletSpeed });
+      }
+
+      if (isFalling && config.fall) {
+        stepFalling(time, dt, config.fall);
+      } else {
+        stepGrid(time, dt);
       }
 
       drawFrame(time);
@@ -289,10 +388,15 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     }
 
     measure();
-    buildInvaders();
+    if (isFalling) {
+      fallingInvaders = [];
+    } else {
+      buildGridInvaders();
+    }
     resize();
 
     if (prefersReducedMotion) {
+      // Falling invaders start blank; a static reduced-motion frame simply shows the empty scene + ship.
       drawFrame(0);
     } else {
       rafId = requestAnimationFrame(step);

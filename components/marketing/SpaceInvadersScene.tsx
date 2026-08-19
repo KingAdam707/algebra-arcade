@@ -10,7 +10,8 @@ const OPERATORS = ["+", "-", "×", "÷"];
 /** The enemies: the numbers and letters an operator would act on. */
 const INVADER_GLYPHS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "x", "y", "z", "a", "b", "n"];
 
-const COLORS = {
+/** Fixed palette for the hero/strip variants, which render as a self-contained dark "screen" panel. */
+const PANEL_COLORS = {
   panelBg: "#080a14",
   invader: "#8ea2ff",
   invaderHit: "#eef0fa",
@@ -19,17 +20,37 @@ const COLORS = {
   star: "#22283f",
 };
 
-type Variant = "hero" | "strip";
+type Palette = typeof PANEL_COLORS;
+
+/** For the seamless "side" variant: reads the app's actual theme tokens so it always matches the page. */
+function readThemeColors(): Palette {
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
+  return {
+    panelBg: "transparent",
+    invader: read("--accent", "#2f53e0"),
+    invaderHit: read("--ink", "#161b2e"),
+    ship: read("--ink", "#161b2e"),
+    bullet: read("--accent-strong", "#223fb8"),
+    star: read("--border", "#dcdfec"),
+  };
+}
+
+type Variant = "hero" | "strip" | "side";
 
 type VariantConfig = {
   cols: number;
-  rows: number;
-  heightPx: number;
+  /** Fixed row count, or null to fill the measured height with as many rows as fit. */
+  rows: number | null;
+  /** Fixed panel height in px, or null to fill the parent container's measured height. */
+  heightPx: number | null;
+  seamless: boolean;
   shipPixelSize: number;
   invaderFontPx: number;
   bulletFontPx: number;
   cellWidth: number;
   cellHeight: number;
+  driftFactor: number;
   bulletIntervalMs: [number, number];
   bulletSpeed: number;
   starCount: number;
@@ -40,11 +61,13 @@ const CONFIG: Record<Variant, VariantConfig> = {
     cols: 6,
     rows: 3,
     heightPx: 260,
+    seamless: false,
     shipPixelSize: 3,
     invaderFontPx: 16,
     bulletFontPx: 14,
     cellWidth: 62,
     cellHeight: 42,
+    driftFactor: 0.08,
     bulletIntervalMs: [450, 850],
     bulletSpeed: 0.09,
     starCount: 40,
@@ -53,14 +76,31 @@ const CONFIG: Record<Variant, VariantConfig> = {
     cols: 7,
     rows: 1,
     heightPx: 34,
+    seamless: false,
     shipPixelSize: 1.4,
     invaderFontPx: 10,
     bulletFontPx: 9,
     cellWidth: 30,
     cellHeight: 16,
+    driftFactor: 0.08,
     bulletIntervalMs: [900, 1700],
     bulletSpeed: 0.06,
     starCount: 14,
+  },
+  side: {
+    cols: 1,
+    rows: null,
+    heightPx: null,
+    seamless: true,
+    shipPixelSize: 2.6,
+    invaderFontPx: 15,
+    bulletFontPx: 12,
+    cellWidth: 40,
+    cellHeight: 56,
+    driftFactor: 0.35,
+    bulletIntervalMs: [650, 1200],
+    bulletSpeed: 0.08,
+    starCount: 24,
   },
 };
 
@@ -80,7 +120,8 @@ function pickFrom(pool: readonly string[]): string {
  * Decorative 8-bit arcade scene: a ship fires operators (+ - x div) upward at
  * a gently drifting formation of number/letter invaders. Purely atmospheric
  * branding for "Algebra Arcade" — no game state, no interaction, always
- * aria-hidden.
+ * aria-hidden. The "side" variant is seamless (no panel background or
+ * border) and reads the app's live theme tokens instead of a fixed palette.
  */
 export function SpaceInvadersScene({ variant }: { variant: Variant }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,16 +136,43 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     if (!ctx) return;
 
     const config = CONFIG[variant];
+    let colors: Palette = config.seamless ? readThemeColors() : PANEL_COLORS;
 
     let width = 0;
-    const height = config.heightPx;
+    let height = 0;
+    let rows = config.rows ?? 6;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let invaders: Invader[] = [];
 
-    const invaders: Invader[] = [];
-    for (let row = 0; row < config.rows; row++) {
-      for (let col = 0; col < config.cols; col++) {
-        invaders.push({ col, row, char: pickFrom(INVADER_GLYPHS), alive: true, hitUntil: 0, respawnAt: 0 });
+    function buildInvaders() {
+      invaders = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < config.cols; col++) {
+          invaders.push({ col, row, char: pickFrom(INVADER_GLYPHS), alive: true, hitUntil: 0, respawnAt: 0 });
+        }
       }
+    }
+
+    function measure() {
+      if (!canvas || !container) return;
+      width = container.clientWidth;
+      height = config.heightPx ?? container.clientHeight;
+      if (config.rows === null) {
+        const usableHeight = Math.max(0, height - 90);
+        rows = Math.max(4, Math.floor(usableHeight / config.cellHeight));
+      }
+    }
+
+    function resize() {
+      if (!canvas || !container) return;
+      measure();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (ctx) ctx.imageSmoothingEnabled = false;
     }
 
     const stars: Star[] = Array.from({ length: config.starCount }, () => ({
@@ -118,40 +186,30 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     let elapsed = 0;
     let rafId = 0;
 
-    function resize() {
-      if (!canvas || !container) return;
-      width = container.clientWidth;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round(width * dpr));
-      canvas.height = Math.max(1, Math.round(height * dpr));
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (ctx) ctx.imageSmoothingEnabled = false;
-    }
-
     function formationOrigin(time: number) {
-      const drift = Math.sin(time / 1600) * (width * 0.08);
+      const drift = Math.sin(time / 1600) * (width * config.driftFactor);
       const startX = width / 2 - (config.cols * config.cellWidth) / 2 + drift;
-      const startY = variant === "hero" ? 26 : (height - config.rows * config.cellHeight) / 2;
+      const startY = variant === "strip" ? (height - rows * config.cellHeight) / 2 : 26;
       return { startX, startY };
     }
 
     function shipX(time: number) {
-      return width / 2 + Math.sin(time / 2400) * (width * 0.18);
+      return width / 2 + Math.sin(time / 2400) * (width * config.driftFactor);
     }
 
     function shipY() {
-      return variant === "hero" ? height - 34 : height - 14;
+      return variant === "strip" ? height - 14 : height - 34;
     }
 
     function drawFrame(time: number) {
       if (!ctx) return;
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = COLORS.panelBg;
-      ctx.fillRect(0, 0, width, height);
+      if (!config.seamless) {
+        ctx.fillStyle = colors.panelBg;
+        ctx.fillRect(0, 0, width, height);
+      }
 
-      ctx.fillStyle = COLORS.star;
+      ctx.fillStyle = colors.star;
       for (const star of stars) {
         ctx.fillRect(star.x * width, star.y * height, star.r, star.r);
       }
@@ -165,7 +223,7 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
         if (!invader.alive) continue;
         const x = startX + invader.col * config.cellWidth;
         const y = startY + invader.row * config.cellHeight;
-        ctx.fillStyle = time < invader.hitUntil ? COLORS.invaderHit : COLORS.invader;
+        ctx.fillStyle = time < invader.hitUntil ? colors.invaderHit : colors.invader;
         ctx.fillText(invader.char, x, y);
       }
 
@@ -177,11 +235,11 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
         sx - (pixelGridWidth(SHIP) * config.shipPixelSize) / 2,
         sy,
         config.shipPixelSize,
-        COLORS.ship,
+        colors.ship,
       );
 
       ctx.font = `${config.bulletFontPx}px ${pixelFont.style.fontFamily}, monospace`;
-      ctx.fillStyle = COLORS.bullet;
+      ctx.fillStyle = colors.bullet;
       for (const bullet of bullets) {
         ctx.fillText(bullet.char, bullet.x, bullet.y);
       }
@@ -230,6 +288,8 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
       rafId = requestAnimationFrame(step);
     }
 
+    measure();
+    buildInvaders();
     resize();
 
     if (prefersReducedMotion) {
@@ -238,15 +298,30 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
       rafId = requestAnimationFrame(step);
     }
 
-    const observer = new ResizeObserver(() => {
+    const resizeObserver = new ResizeObserver(() => {
       resize();
       if (prefersReducedMotion) drawFrame(0);
     });
-    observer.observe(container);
+    resizeObserver.observe(container);
+
+    let themeObserver: MutationObserver | null = null;
+    let mediaQuery: MediaQueryList | null = null;
+    const refreshColors = () => {
+      colors = readThemeColors();
+      if (prefersReducedMotion) drawFrame(0);
+    };
+    if (config.seamless) {
+      themeObserver = new MutationObserver(refreshColors);
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      mediaQuery.addEventListener("change", refreshColors);
+    }
 
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
-      observer.disconnect();
+      resizeObserver.disconnect();
+      themeObserver?.disconnect();
+      mediaQuery?.removeEventListener("change", refreshColors);
     };
   }, [variant, prefersReducedMotion]);
 
@@ -256,10 +331,10 @@ export function SpaceInvadersScene({ variant }: { variant: Variant }) {
     <div
       ref={containerRef}
       aria-hidden="true"
-      className={pixelFont.className}
-      style={{ width: "100%", height: config.heightPx }}
+      className={`${pixelFont.className} ${config.heightPx === null ? "h-full" : ""}`}
+      style={{ width: "100%", height: config.heightPx ?? undefined }}
     >
-      <canvas ref={canvasRef} className="block h-full w-full rounded-control" />
+      <canvas ref={canvasRef} className="block h-full w-full" />
     </div>
   );
 }

@@ -51,7 +51,14 @@ export default function StartScreen() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6">
+    <div className="min-h-dvh w-full xl:grid xl:grid-cols-[1fr_minmax(0,48rem)_1fr]">
+      <aside className="hidden xl:block" aria-hidden="true">
+        <div className="sticky top-0 h-dvh">
+          <SpaceInvadersScene variant="side" />
+        </div>
+      </aside>
+
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6">
       <header className="flex flex-wrap items-center gap-3">
         <span className="shrink-0 text-xl font-semibold tracking-tight text-ink">Algebra Arcade</span>
         <div className="min-w-[100px] flex-1 overflow-hidden rounded-control">
@@ -71,7 +78,7 @@ export default function StartScreen() {
         </p>
       </section>
 
-      <section className="overflow-hidden rounded-stage border border-border">
+      <section className="overflow-hidden rounded-stage border border-border xl:hidden">
         <SpaceInvadersScene variant="hero" />
       </section>
 
@@ -155,6 +162,13 @@ export default function StartScreen() {
         )}
       </section>
       </main>
+      </div>
+
+      <aside className="hidden xl:block" aria-hidden="true">
+        <div className="sticky top-0 h-dvh">
+          <SpaceInvadersScene variant="side" />
+        </div>
+      </aside>
     </div>
   );
 }

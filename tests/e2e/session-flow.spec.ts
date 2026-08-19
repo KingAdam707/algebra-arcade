@@ -87,10 +87,41 @@ test("arcade scene reflows on the start screen at 320px with no horizontal scrol
   );
   expect(hasHorizontalScroll).toBe(false);
 
-  const canvasWidths = await page.$$eval("canvas", (canvases) => canvases.map((c) => c.clientWidth));
-  expect(canvasWidths.length).toBeGreaterThan(0);
-  for (const width of canvasWidths) {
+  // The two "side" scenes are display:none below the xl breakpoint (offsetParent is
+  // null for hidden elements), so only assert on canvases actually laid out on screen.
+  const visibleCanvasWidths = await page.$$eval("canvas", (canvases) =>
+    canvases.filter((c) => c.offsetParent !== null).map((c) => c.clientWidth),
+  );
+  expect(visibleCanvasWidths.length).toBeGreaterThan(0);
+  for (const width of visibleCanvasWidths) {
     expect(width).toBeGreaterThan(0);
     expect(width).toBeLessThanOrEqual(320);
   }
+});
+
+test("shows flanking side scenes on wide desktop but not on narrower screens", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.waitForTimeout(300);
+
+  const wideCanvasCount = await page.$$eval(
+    "canvas",
+    (canvases) => canvases.filter((c) => c.offsetParent !== null).length,
+  );
+  // strip (1) + hero-or-nothing (0, hidden at this width) + two side scenes (2) = 3.
+  expect(wideCanvasCount).toBe(3);
+
+  const hasHorizontalScroll = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalScroll).toBe(false);
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.waitForTimeout(300);
+  const narrowCanvasCount = await page.$$eval(
+    "canvas",
+    (canvases) => canvases.filter((c) => c.offsetParent !== null).length,
+  );
+  // Below xl: strip (1) + hero (1), no side scenes.
+  expect(narrowCanvasCount).toBe(2);
 });

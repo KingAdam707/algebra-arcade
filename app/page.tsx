@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { EquationLine } from "@/components/equation/EquationLine";
 import { SpaceInvadersScene } from "@/components/marketing/SpaceInvadersScene";
+import { WorkedExample } from "@/components/marketing/WorkedExample";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { STEP_INFO } from "@/content/method";
-import { constantTerm, xTerm, type Equation } from "@/domain/equation";
 import type { Difficulty } from "@/domain/generator";
 import { createSeededRandom } from "@/domain/random";
-import { fromInt } from "@/domain/rational";
 import { loadActiveSession, loadDifficulty, saveActiveSession, saveDifficulty } from "@/state/persistence";
 import { createSession } from "@/state/session-machine";
 
@@ -19,15 +17,11 @@ const DIFFICULTIES: { value: Difficulty; label: string; description: string }[] 
   { value: "hard", label: "Hard", description: "Fractions and negatives" },
 ];
 
-const PREVIEW_START: Equation = { left: [xTerm(fromInt(2)), constantTerm(fromInt(-6))], right: [constantTerm(fromInt(10))] };
-const PREVIEW_RESULT: Equation = { left: [xTerm(fromInt(2))], right: [constantTerm(fromInt(16))] };
-
 export default function StartScreen() {
   const router = useRouter();
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
-  const [previewApplied, setPreviewApplied] = useState(false);
 
   useEffect(() => {
     // Deferred to after mount: localStorage isn't available during SSR, and reading
@@ -82,18 +76,7 @@ export default function StartScreen() {
         <SpaceInvadersScene variant="hero" />
       </section>
 
-      <section className="rounded-stage border border-border bg-surface-raised p-6">
-        <div className="flex flex-col items-center gap-4">
-          <EquationLine equation={previewApplied ? PREVIEW_RESULT : PREVIEW_START} size="sm" />
-          <button
-            type="button"
-            onClick={() => setPreviewApplied((v) => !v)}
-            className="min-h-11 rounded-control border border-border bg-surface-sunken px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:border-border-strong"
-          >
-            {previewApplied ? "Reset" : "Try RULE: + 6"}
-          </button>
-        </div>
-      </section>
+      <WorkedExample />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-ink-muted">Difficulty</h2>

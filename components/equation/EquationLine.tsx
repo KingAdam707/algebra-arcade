@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import type { Equation } from "@/domain/equation";
 import { formatEquation, spokenEquation, type FormattedTerm } from "@/domain/formatter";
 import { TermToken } from "./TermToken";
@@ -12,8 +12,11 @@ const EASE_IN_OUT = [0.77, 0, 0.175, 1] as const;
 /**
  * The stable three-column equation grid: [ LHS, right-aligned ] [ = ] [ RHS, left-aligned ].
  * The equals sign never moves, reinforcing balance during every transformation. Terms use
- * Motion's layout animation so a RULE appearing, or two terms collapsing into one, reads as a
- * geometry-aware transformation rather than an abrupt content swap.
+ * Motion's layout animation so remaining terms glide into their new position when a sibling
+ * term appears or is removed. Removed terms disappear immediately rather than fading out:
+ * wrapping this in AnimatePresence (for an exit fade) reproducibly leaves the exiting term
+ * stuck on screen at full opacity with the current motion/React version combo, so the exit
+ * animation is intentionally dropped in favour of a correct equation display.
  */
 export function EquationLine({
   equation,
@@ -67,7 +70,7 @@ function renderSide(
   reduceMotion: boolean,
 ) {
   return (
-    <AnimatePresence initial={false}>
+    <>
       {terms.map((term, index) => {
         const isHighlighted = highlight?.side === side && highlight.indices.includes(index);
         return (
@@ -76,7 +79,6 @@ function renderSide(
             layout={!reduceMotion}
             initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92 }}
             transition={{ duration: reduceMotion ? 0.12 : 0.28, ease: EASE_IN_OUT }}
             className={
               isHighlighted
@@ -88,6 +90,6 @@ function renderSide(
           </motion.span>
         );
       })}
-    </AnimatePresence>
+    </>
   );
 }

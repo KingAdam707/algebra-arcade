@@ -99,6 +99,33 @@ test("arcade scene reflows on the start screen at 320px with no horizontal scrol
   }
 });
 
+test("worked example walks through the full solve and can restart", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByText("Start", { exact: true })).toBeVisible();
+
+  // Advancing briefly locks the "Next" button (see WorkedExample's `locked` state) so a
+  // fast double-click can't fire two equation transitions before the first settles.
+  // Playwright's own assertions resolve far faster than a human would click, so each
+  // step here waits out that lock before advancing again.
+  const next = page.getByRole("button", { name: "Next" });
+  async function advance(expectedText: string) {
+    await next.click();
+    await page.waitForTimeout(400);
+    await expect(page.getByText(expectedText, { exact: true })).toBeVisible();
+  }
+
+  await advance("RULE: + 6");
+  await advance("Simplified");
+  await advance("RULE: ÷ 2");
+  await advance("Solved!");
+
+  const restart = page.getByRole("button", { name: "Restart example" });
+  await expect(restart).toBeVisible();
+  await restart.click();
+  await expect(page.getByText("Start", { exact: true })).toBeVisible();
+});
+
 test("shows flanking side scenes on wide desktop but not on narrower screens", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");

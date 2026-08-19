@@ -30,7 +30,7 @@ function ruleExplanation(step: ActiveStep): string {
  * hand-authoring each equation, so the demo can never drift out of sync with how
  * the app actually solves equations.
  */
-function buildWorkedExample(start: Equation): WorkedExampleFrame[] {
+export function buildWorkedExample(start: Equation): WorkedExampleFrame[] {
   const frames: WorkedExampleFrame[] = [
     {
       id: "start",

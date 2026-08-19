@@ -1,35 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EquationHistory } from "@/components/equation/EquationHistory";
 import { EquationLine } from "@/components/equation/EquationLine";
 import { AutoFocusButton } from "@/components/ui/auto-focus-button";
 import { FadeIn } from "@/components/ui/fade-in";
-import { WORKED_EXAMPLE_FRAMES } from "@/content/worked-example";
+import { buildWorkedExample, WORKED_EXAMPLE_FRAMES, type WorkedExampleFrame } from "@/content/worked-example";
+import { generateQuestion } from "@/domain/generator";
+import { createSeededRandom } from "@/domain/random";
 
-const BADGE_STYLE: Record<(typeof WORKED_EXAMPLE_FRAMES)[number]["kind"], string> = {
+const BADGE_STYLE: Record<WorkedExampleFrame["kind"], string> = {
   start: "bg-surface-sunken text-ink-muted",
   rule: "bg-accent-soft text-ink",
   result: "bg-accent-soft text-ink",
   solved: "bg-success-soft text-success",
 };
 
+/** A fresh, easy-difficulty equation walkthrough, built from the same generator real practice sessions use. */
+function randomFrames(): WorkedExampleFrame[] {
+  const rng = createSeededRandom(Date.now() ^ Math.floor(Math.random() * 2 ** 31));
+  return buildWorkedExample(generateQuestion("easy", rng).equation);
+}
+
 /**
  * A fully passive, narrated worked example: pressing "Next" advances through the
  * real solver's own step-by-step derivation (see content/worked-example.ts) one
  * frame at a time. Earlier equations stay visible in the history above, so the
  * whole derivation reads as one continuous story rather than a series of resets.
+ * Starts on a fixed equation (stable for server rendering, avoiding a hydration
+ * mismatch), then swaps to a fresh random one right after mount and again every
+ * time the demo restarts, so repeat visitors don't see the same example forever.
  */
 export function WorkedExample() {
+  const [frames, setFrames] = useState<WorkedExampleFrame[]>(WORKED_EXAMPLE_FRAMES);
   const [index, setIndex] = useState(0);
   const [locked, setLocked] = useState(false);
-  const frame = WORKED_EXAMPLE_FRAMES[index];
-  const isFinal = index === WORKED_EXAMPLE_FRAMES.length - 1;
+  const frame = frames[index];
+  const isFinal = index === frames.length - 1;
 
-  const history: typeof WORKED_EXAMPLE_FRAMES[number]["equation"][] = [];
+  useEffect(() => {
+    // Deferred to after mount: picking randomly during render would produce a
+    // different equation on the server than on the client, causing a hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFrames(randomFrames());
+  }, []);
+
+  const history: (typeof frames)[number]["equation"][] = [];
   for (let i = 1; i <= index; i++) {
-    if (WORKED_EXAMPLE_FRAMES[i].equation !== WORKED_EXAMPLE_FRAMES[i - 1].equation) {
-      history.push(WORKED_EXAMPLE_FRAMES[i - 1].equation);
+    if (frames[i].equation !== frames[i - 1].equation) {
+      history.push(frames[i - 1].equation);
     }
   }
 
@@ -38,7 +57,12 @@ export function WorkedExample() {
     // transition before the first term's enter/exit animation has settled.
     if (locked) return;
     setLocked(true);
-    setIndex((i) => (i >= WORKED_EXAMPLE_FRAMES.length - 1 ? 0 : i + 1));
+    if (index >= frames.length - 1) {
+      setFrames(randomFrames());
+      setIndex(0);
+    } else {
+      setIndex(index + 1);
+    }
     window.setTimeout(() => setLocked(false), 350);
   }
 

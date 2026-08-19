@@ -102,27 +102,30 @@ test("arcade scene reflows on the start screen at 320px with no horizontal scrol
 test("worked example walks through the full solve and can restart", async ({ page }) => {
   await page.goto("/");
 
+  // The starting equation is randomised shortly after mount (a fresh generated
+  // question each load/restart, so the demo doesn't show the same example every
+  // time) — give that swap a moment to settle before driving the walkthrough.
+  await page.waitForTimeout(200);
   await expect(page.getByText("Start", { exact: true })).toBeVisible();
 
   // Advancing briefly locks the "Next" button (see WorkedExample's `locked` state) so a
   // fast double-click can't fire two equation transitions before the first settles.
   // Playwright's own assertions resolve far faster than a human would click, so each
-  // step here waits out that lock before advancing again.
+  // step here waits out that lock before advancing again. The number of steps varies
+  // with the random equation (whether it needs the sign-fix step), so drive forward
+  // generically until "Solved!" appears rather than asserting a fixed step count.
   const next = page.getByRole("button", { name: "Next" });
-  async function advance(expectedText: string) {
+  const solved = page.getByText("Solved!", { exact: true });
+  for (let guard = 0; guard < 10 && !(await solved.isVisible()); guard++) {
     await next.click();
     await page.waitForTimeout(400);
-    await expect(page.getByText(expectedText, { exact: true })).toBeVisible();
   }
-
-  await advance("RULE: + 6");
-  await advance("Simplified");
-  await advance("RULE: ÷ 2");
-  await advance("Solved!");
+  await expect(solved).toBeVisible();
 
   const restart = page.getByRole("button", { name: "Restart example" });
   await expect(restart).toBeVisible();
   await restart.click();
+  await page.waitForTimeout(400);
   await expect(page.getByText("Start", { exact: true })).toBeVisible();
 });
 

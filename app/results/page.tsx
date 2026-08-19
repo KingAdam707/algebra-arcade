@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SpaceInvadersScene } from "@/components/marketing/SpaceInvadersScene";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SKILL_LABELS, createSession, type SkillId } from "@/state/session-machine";
 import { createSeededRandom } from "@/domain/random";
@@ -52,11 +53,16 @@ export default function ResultsPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-8 px-4 py-10 sm:px-6">
-      <header className="flex items-center justify-between">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-ink">
-          Algebra Arcade
-        </Link>
-        <ThemeToggle />
+      <header className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <Link href="/" className="text-lg font-semibold tracking-tight text-ink">
+            Algebra Arcade
+          </Link>
+          <ThemeToggle />
+        </div>
+        <div className="overflow-hidden rounded-control">
+          <SpaceInvadersScene variant="strip" />
+        </div>
       </header>
 
       <main className="flex flex-col gap-8">

@@ -76,3 +76,21 @@ test("never shows a generic 'Wrong' response", async ({ page }) => {
   await expect(page.getByText(/^Wrong!?$/)).toHaveCount(0);
   await expect(page.getByText("That changes the equation", { exact: false })).toBeVisible();
 });
+
+test("arcade scene reflows on the start screen at 320px with no horizontal scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/");
+  await page.waitForTimeout(300);
+
+  const hasHorizontalScroll = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalScroll).toBe(false);
+
+  const canvasWidths = await page.$$eval("canvas", (canvases) => canvases.map((c) => c.clientWidth));
+  expect(canvasWidths.length).toBeGreaterThan(0);
+  for (const width of canvasWidths) {
+    expect(width).toBeGreaterThan(0);
+    expect(width).toBeLessThanOrEqual(320);
+  }
+});

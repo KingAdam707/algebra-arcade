@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EquationLine } from "@/components/equation/EquationLine";
+import { SpaceInvadersScene } from "@/components/marketing/SpaceInvadersScene";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { STEP_INFO } from "@/content/method";
 import { constantTerm, xTerm, type Equation } from "@/domain/equation";
@@ -51,9 +52,14 @@ export default function StartScreen() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6">
-      <header className="flex items-center justify-between">
-        <span className="text-xl font-semibold tracking-tight text-ink">Algebra Arcade</span>
-        <ThemeToggle />
+      <header className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xl font-semibold tracking-tight text-ink">Algebra Arcade</span>
+          <ThemeToggle />
+        </div>
+        <div className="overflow-hidden rounded-control">
+          <SpaceInvadersScene variant="strip" />
+        </div>
       </header>
 
       <main className="flex flex-col gap-10">
@@ -65,6 +71,10 @@ export default function StartScreen() {
           A calm, guided way to practise one-variable equations — choose a RULE, watch it apply to both sides, and
           simplify step by step.
         </p>
+      </section>
+
+      <section className="overflow-hidden rounded-stage border border-border">
+        <SpaceInvadersScene variant="hero" />
       </section>
 
       <section className="rounded-stage border border-border bg-surface-raised p-6">

@@ -35,6 +35,13 @@ export function ruleFeedbackMessage(category: RuleFeedbackCategory, idealRule: R
   }
 }
 
+/** Feedback for a wrong answer to step 1's mandatory "is the x-term positive?" check. */
+export function signCheckFeedbackMessage(actualPositive: boolean): string {
+  return actualPositive
+    ? "Look again — the x-term's coefficient here is already positive."
+    : "Look again — the x-term's coefficient here is negative.";
+}
+
 export const SIMPLIFICATION_FEEDBACK: Record<SimplificationFeedbackCategory, string> = {
   correct: "Correct.",
   "arithmetic-error": "Not quite — check the arithmetic and try again.",

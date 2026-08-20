@@ -30,7 +30,10 @@ export function EquationLine({
   announce?: boolean;
 }) {
   const tree = formatEquation(equation);
-  const textSize = size === "lg" ? "text-[clamp(2rem,5vw,4rem)]" : "text-[clamp(1.25rem,3vw,1.75rem)]";
+  // Kept deliberately modest: at the old clamp(2rem,5vw,4rem) a step with 3-4 terms on one
+  // side would frequently overflow the available column width and wrap onto a second line,
+  // making the equation stage balloon vertically instead of just filling the row.
+  const textSize = size === "lg" ? "text-[clamp(1.375rem,3.5vw,2.5rem)]" : "text-[clamp(1.25rem,3vw,1.75rem)]";
   const prefersReducedMotion = useReducedMotion();
 
   return (
@@ -44,13 +47,13 @@ export function EquationLine({
       */}
       <div
         aria-hidden="true"
-        className={`grid grid-cols-[1fr_auto_1fr] items-baseline gap-2 sm:gap-3 font-math ${textSize}`}
+        className={`grid grid-cols-[1fr_auto_1fr] items-baseline gap-1.5 sm:gap-2 font-math ${textSize}`}
       >
-        <div className="flex flex-wrap items-baseline justify-end gap-x-2 gap-y-1">
+        <div className="flex flex-wrap items-baseline justify-end gap-x-1.5 gap-y-1">
           {renderSide(tree.left, "left", highlight, Boolean(prefersReducedMotion))}
         </div>
         <div className="px-1 text-ink-muted">=</div>
-        <div className="flex flex-wrap items-baseline justify-start gap-x-2 gap-y-1">
+        <div className="flex flex-wrap items-baseline justify-start gap-x-1.5 gap-y-1">
           {renderSide(tree.right, "right", highlight, Boolean(prefersReducedMotion))}
         </div>
       </div>

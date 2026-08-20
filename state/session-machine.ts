@@ -23,6 +23,7 @@ import {
   idealRuleForStep,
   isAddSubtract,
   isCancellationGroup,
+  isXCoefficientPositive,
 } from "@/domain/evaluator";
 import type { RandomSource } from "@/domain/random";
 import { equalsRational, isZero, negate } from "@/domain/rational";
@@ -73,6 +74,7 @@ export type HintLevel = 0 | 1 | 2 | 3 | 4;
 
 export type PracticePhase =
   | { name: "question_intro" }
+  | { name: "confirm_sign"; lastFeedbackCategory: "wrong" | null }
   | { name: "enter_rule"; hintLevel: HintLevel; lastFeedbackCategory: RuleFeedbackCategory | null }
   | { name: "rule_feedback"; category: RuleFeedbackCategory; rule: Rule }
   | {
@@ -138,6 +140,7 @@ export function createSession(difficulty: Difficulty, rng: RandomSource, questio
 
 export type SessionEvent =
   | { type: "CONTINUE" }
+  | { type: "ANSWER_SIGN_CHECK"; positive: boolean }
   | { type: "SUBMIT_RULE"; rule: Rule }
   | { type: "REQUEST_HINT" }
   | { type: "SELECT_SIMPLIFICATION_TARGET"; targetId: string }
@@ -269,10 +272,10 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
   switch (event.type) {
     case "CONTINUE": {
       if (phase.name === "question_intro") {
-        // inspect_sign is a system computation, not a learner decision, so it never
-        // needs its own render frame: resolve it synchronously within this transition.
-        const { equation, step, phase: nextPhase } = startStep(state.equation, state.currentStep);
-        return { ...state, equation, currentStep: step, phase: nextPhase };
+        // Step 1 always starts with the mandatory sign check, even when x is already
+        // positive: the learner must actively notice that, rather than have it silently
+        // skipped for them.
+        return { ...state, phase: { name: "confirm_sign", lastFeedbackCategory: null } };
       }
       if (phase.name === "rule_feedback") {
         if (phase.category !== "correct") {
@@ -334,6 +337,23 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
         };
       }
       return state;
+    }
+
+    case "ANSWER_SIGN_CHECK": {
+      if (phase.name !== "confirm_sign") return state;
+      const actualPositive = isXCoefficientPositive(state.equation);
+      const correct = event.positive === actualPositive;
+      const firstAttempt = phase.lastFeedbackCategory === null;
+      const skillTallies = firstAttempt
+        ? recordSkill(state.skillTallies, "make-x-positive", correct)
+        : state.skillTallies;
+
+      if (!correct) {
+        return { ...state, skillTallies, combo: 0, phase: { name: "confirm_sign", lastFeedbackCategory: "wrong" } };
+      }
+
+      const { equation, step, phase: nextPhase } = startStep(state.equation, 1);
+      return { ...state, skillTallies, combo: state.combo + 1, equation, currentStep: step, phase: nextPhase };
     }
 
     case "SUBMIT_RULE": {

@@ -34,8 +34,12 @@ describe("session machine: canonical example 1 (2x - 6 = 10)", () => {
     let state: SessionState = createSessionFromQuestions("easy", [q]);
     expect(plainTextEquation(state.equation)).toBe("2x - 6 = 10");
 
-    // Step 1 is already positive, so this should auto-skip straight to step 2's enter_rule.
+    // Step 1 always starts with the mandatory "is x positive?" check, even though x
+    // already is here; only after answering it correctly does it skip straight to step 2.
     state = reduceSession(state, { type: "CONTINUE" });
+    expect(state.phase.name).toBe("confirm_sign");
+
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true });
     expect(state.phase.name).toBe("enter_rule");
     expect(state.currentStep).toBe(2);
 
@@ -110,7 +114,10 @@ describe("session machine: canonical example 2 (24 - 4x = 8)", () => {
   it("walks the full flow including the step-1 sign-fix rule", () => {
     let state: SessionState = createSessionFromQuestions("easy", [q]);
 
-    state = reduceSession(state, { type: "CONTINUE" }); // -> enter_rule (step 1 needed)
+    state = reduceSession(state, { type: "CONTINUE" }); // -> confirm_sign
+    expect(state.phase.name).toBe("confirm_sign");
+
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: false }); // -> enter_rule (step 1 needed)
     expect(state.phase.name).toBe("enter_rule");
     expect(state.currentStep).toBe(1);
 
@@ -192,7 +199,8 @@ describe("session machine: mistakes, hints, undo, and skip", () => {
 
   it("lets the learner retry after an incorrect rule and tracks hint usage", () => {
     let state: SessionState = createSessionFromQuestions("easy", [q]);
-    state = reduceSession(state, { type: "CONTINUE" }); // -> enter_rule, step 2
+    state = reduceSession(state, { type: "CONTINUE" }); // -> confirm_sign
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true }); // -> enter_rule, step 2
 
     // Sign error: -6 instead of +6.
     state = reduceSession(state, { type: "SUBMIT_RULE", rule: { kind: "subtract", term: constantTerm(fromInt(6)) } });
@@ -213,7 +221,8 @@ describe("session machine: mistakes, hints, undo, and skip", () => {
 
   it("supports undo of a resolved simplification target", () => {
     let state: SessionState = createSessionFromQuestions("easy", [q]);
-    state = reduceSession(state, { type: "CONTINUE" }); // -> enter_rule, step 2
+    state = reduceSession(state, { type: "CONTINUE" }); // -> confirm_sign
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true }); // -> enter_rule, step 2
     state = reduceSession(state, { type: "SUBMIT_RULE", rule: { kind: "add", term: constantTerm(fromInt(6)) } });
     state = reduceSession(state, { type: "CONTINUE" });
 
@@ -229,12 +238,76 @@ describe("session machine: mistakes, hints, undo, and skip", () => {
   });
 });
 
+describe("session machine: mandatory step-1 sign check", () => {
+  it("gates progress until answered, and rejects a wrong answer with feedback, when x is already positive", () => {
+    const q = question({
+      equation: { left: [xTerm(fromInt(2)), constantTerm(fromInt(-6))], right: [constantTerm(fromInt(10))] },
+      solution: fromInt(8),
+    });
+    let state: SessionState = createSessionFromQuestions("easy", [q]);
+    state = reduceSession(state, { type: "CONTINUE" });
+    expect(state.phase.name).toBe("confirm_sign");
+
+    // Wrong: x's coefficient here is +2, already positive.
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: false });
+    expect(state.phase.name).toBe("confirm_sign");
+    expect(state.phase.name === "confirm_sign" && state.phase.lastFeedbackCategory).toBe("wrong");
+    expect(state.currentStep).toBe(1); // still gated on step 1, not silently advanced
+
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true });
+    expect(state.phase.name).toBe("enter_rule");
+    expect(state.currentStep).toBe(2); // step 1 satisfied, skips straight to step 2
+
+    const summary = summariseSession(state);
+    expect(summary.skillTallies["make-x-positive"].attempts).toBe(1);
+    expect(summary.skillTallies["make-x-positive"].correctFirstTry).toBe(0);
+  });
+
+  it("gates progress until answered, and rejects a wrong answer with feedback, when x is negative", () => {
+    const q = question({
+      equation: { left: [constantTerm(fromInt(24)), xTerm(fromInt(-4))], right: [constantTerm(fromInt(8))] },
+      solution: fromInt(4),
+    });
+    let state: SessionState = createSessionFromQuestions("easy", [q]);
+    state = reduceSession(state, { type: "CONTINUE" });
+    expect(state.phase.name).toBe("confirm_sign");
+
+    // Wrong: x's coefficient here is -4, negative.
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true });
+    expect(state.phase.name).toBe("confirm_sign");
+    expect(state.phase.name === "confirm_sign" && state.phase.lastFeedbackCategory).toBe("wrong");
+
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: false });
+    expect(state.phase.name).toBe("enter_rule");
+    expect(state.currentStep).toBe(1); // step 1 genuinely needed, RULE builder shown
+
+    const summary = summariseSession(state);
+    expect(summary.skillTallies["make-x-positive"].attempts).toBe(1);
+    expect(summary.skillTallies["make-x-positive"].correctFirstTry).toBe(0);
+  });
+
+  it("records a correct-first-try only when the very first answer is right", () => {
+    const q = question({
+      equation: { left: [xTerm(fromInt(2)), constantTerm(fromInt(-6))], right: [constantTerm(fromInt(10))] },
+      solution: fromInt(8),
+    });
+    let state: SessionState = createSessionFromQuestions("easy", [q]);
+    state = reduceSession(state, { type: "CONTINUE" });
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true });
+
+    const summary = summariseSession(state);
+    expect(summary.skillTallies["make-x-positive"].attempts).toBe(1);
+    expect(summary.skillTallies["make-x-positive"].correctFirstTry).toBe(1);
+  });
+});
+
 describe("summariseSession", () => {
   it("reports the strongest and weakest skill by first-try accuracy", () => {
     let state: SessionState = createSessionFromQuestions("easy", [
       question({ equation: { left: [xTerm(fromInt(2)), constantTerm(fromInt(-6))], right: [constantTerm(fromInt(10))] }, solution: fromInt(8) }),
     ]);
-    state = reduceSession(state, { type: "CONTINUE" }); // -> enter_rule, step 2
+    state = reduceSession(state, { type: "CONTINUE" }); // -> confirm_sign
+    state = reduceSession(state, { type: "ANSWER_SIGN_CHECK", positive: true }); // -> enter_rule, step 2
     // Wrong first, showing this skill is weaker.
     state = reduceSession(state, { type: "SUBMIT_RULE", rule: { kind: "subtract", term: constantTerm(fromInt(6)) } });
     state = reduceSession(state, { type: "CONTINUE" });

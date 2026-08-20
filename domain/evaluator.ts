@@ -43,6 +43,12 @@ function findXCoefficient(equation: Equation): Rational | null {
   return null;
 }
 
+/** Whether the x-term's coefficient is currently positive — the fact step 1's mandatory sign check asks about. */
+export function isXCoefficientPositive(equation: Equation): boolean {
+  const xCoefficient = findXCoefficient(equation);
+  return xCoefficient !== null && !isNegative(xCoefficient);
+}
+
 function constantOnSameSideAsX(equation: Equation): Rational | null {
   const side = equation.left.some((t) => t.variable === "x") ? equation.left : equation.right;
   let constant: Rational = ZERO;

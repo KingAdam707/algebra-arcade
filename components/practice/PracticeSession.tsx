@@ -10,8 +10,8 @@ import { SimplificationPanel } from "@/components/practice/SimplificationPanel";
 import { SessionHeader } from "@/components/practice/SessionHeader";
 import { AutoFocusButton } from "@/components/ui/auto-focus-button";
 import { FadeIn } from "@/components/ui/fade-in";
-import { ruleFeedbackMessage } from "@/content/feedback";
-import { idealRuleForStep } from "@/domain/evaluator";
+import { ruleFeedbackMessage, signCheckFeedbackMessage } from "@/content/feedback";
+import { idealRuleForStep, isXCoefficientPositive } from "@/domain/evaluator";
 import {
   canSkip,
   displayedEquation,
@@ -119,6 +119,40 @@ export function PracticeSession({ initialState }: { initialState: SessionState }
         <section className="rounded-stage border border-border bg-surface-raised p-4 sm:p-6">
           <EquationHistory history={state.stepHistory} />
           <EquationLine equation={equation} announce highlight={activeHighlight(state)} />
+
+          {phase.name === "confirm_sign" && (
+            <FadeIn className="mt-6 flex flex-col items-center gap-4">
+              <p className="text-center text-ink">
+                Is the <span className="font-math italic">x</span>-term positive?
+              </p>
+              {phase.lastFeedbackCategory === "wrong" && (
+                <p
+                  data-testid="sign-check-feedback"
+                  role="status"
+                  aria-live="assertive"
+                  className="max-w-md text-center text-sm text-danger"
+                >
+                  {signCheckFeedbackMessage(isXCoefficientPositive(state.equation))}
+                </p>
+              )}
+              <div className="flex gap-3">
+                <AutoFocusButton
+                  type="button"
+                  onClick={() => dispatch({ type: "ANSWER_SIGN_CHECK", positive: true })}
+                  className="min-h-11 min-w-24 rounded-control bg-accent px-5 py-2 font-medium text-accent-contrast transition-transform duration-150 ease-out active:scale-[0.98]"
+                >
+                  Yes
+                </AutoFocusButton>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "ANSWER_SIGN_CHECK", positive: false })}
+                  className="min-h-11 min-w-24 rounded-control border border-border bg-surface-sunken px-5 py-2 font-medium text-ink transition-colors duration-150 hover:border-border-strong"
+                >
+                  No
+                </button>
+              </div>
+            </FadeIn>
+          )}
 
           {phase.name === "rule_feedback" && (
             <FadeIn className="mt-6 flex flex-col items-center gap-3">

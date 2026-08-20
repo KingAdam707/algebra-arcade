@@ -48,7 +48,11 @@ test.describe("canonical example 1: 2x - 6 = 10", () => {
 
     await page.getByRole("button", { name: "Begin" }).click();
 
-    // Step 1 (already positive) auto-skips; step 2 needs RULE +6.
+    // Step 1: x is already positive, so answer the mandatory sign check with "Yes".
+    await expect(page.getByText("Is the", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Yes", exact: true }).click();
+
+    // That skips straight to step 2, which needs RULE +6.
     await expect(page.getByText("Get the x-term on its own")).toBeVisible();
     await page.getByTestId("rule-op-add").click();
     await enterDigits(page, "6");
@@ -88,6 +92,10 @@ test.describe("canonical example 2: 24 - 4x = 8", () => {
     });
 
     await page.getByRole("button", { name: "Begin" }).click();
+
+    // Step 1: x is negative, so answer the mandatory sign check with "No".
+    await expect(page.getByText("Is the", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "No", exact: true }).click();
 
     // Step 1: RULE +4x.
     await expect(page.getByText("Make the x-term positive")).toBeVisible();

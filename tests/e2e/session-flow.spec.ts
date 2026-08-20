@@ -23,9 +23,16 @@ async function seedSession(page: Page) {
   await page.goto("/play");
 }
 
+/** QUESTION's x-term is already positive (+2), so every seeded-session test answers "Yes" to get past the mandatory step-1 sign check. */
+async function beginAndConfirmPositive(page: Page) {
+  await page.getByRole("button", { name: "Begin" }).click();
+  await expect(page.getByText("Is the", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Yes", exact: true }).click();
+}
+
 test("resumes an in-progress session after a refresh", async ({ page }) => {
   await seedSession(page);
-  await page.getByRole("button", { name: "Begin" }).click();
+  await beginAndConfirmPositive(page);
   await page.getByTestId("rule-op-add").click();
   await page.getByRole("button", { name: "6", exact: true }).click();
   await page.getByRole("button", { name: "Apply to both sides" }).click();
@@ -53,6 +60,8 @@ test("reflows at 320px with no horizontal scroll", async ({ page }) => {
 test("completes the RULE step using only the keyboard", async ({ page }) => {
   await seedSession(page);
   await page.getByRole("button", { name: "Begin" }).click();
+  await page.getByRole("button", { name: "Yes", exact: true }).focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByText("Get the x-term on its own")).toBeVisible();
 
   await page.getByTestId("rule-op-add").focus();
@@ -67,7 +76,7 @@ test("completes the RULE step using only the keyboard", async ({ page }) => {
 
 test("never shows a generic 'Wrong' response", async ({ page }) => {
   await seedSession(page);
-  await page.getByRole("button", { name: "Begin" }).click();
+  await beginAndConfirmPositive(page);
   // Sign error: subtract instead of add.
   await page.getByTestId("rule-op-subtract").click();
   await page.getByRole("button", { name: "6", exact: true }).click();
@@ -75,6 +84,58 @@ test("never shows a generic 'Wrong' response", async ({ page }) => {
 
   await expect(page.getByText(/^Wrong!?$/)).toHaveCount(0);
   await expect(page.getByText("That changes the equation", { exact: false })).toBeVisible();
+});
+
+test("mandatory step-1 sign check gates progress and rejects a wrong answer without a generic 'Wrong'", async ({ page }) => {
+  await seedSession(page); // QUESTION's x-term is already positive (+2).
+  await page.getByRole("button", { name: "Begin" }).click();
+
+  await expect(page.getByText("Is the", { exact: false })).toBeVisible();
+  // The RULE builder (step's add/subtract toggle) must not appear until the sign check is answered.
+  await expect(page.getByTestId("rule-op-add")).toHaveCount(0);
+
+  // Wrong: x is already positive here, so "No" is incorrect.
+  await page.getByRole("button", { name: "No", exact: true }).click();
+  await expect(page.getByText(/^Wrong!?$/)).toHaveCount(0);
+  await expect(page.getByTestId("sign-check-feedback")).toContainText("already positive");
+  // Still gated: answering wrong does not advance past step 1.
+  await expect(page.getByText("Is the", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("rule-op-add")).toHaveCount(0);
+
+  // Correct: advances straight to step 2's RULE builder, since step 1 is satisfied.
+  await page.getByRole("button", { name: "Yes", exact: true }).click();
+  await expect(page.getByText("Remove the constant on the x side", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("rule-op-add")).toBeVisible();
+});
+
+test("mandatory step-1 sign check leads into the RULE builder when x is negative", async ({ page }) => {
+  const session = createSessionFromQuestions("easy", [
+    {
+      equation: { left: [constantTerm(fromInt(24)), xTerm(fromInt(-4))], right: [constantTerm(fromInt(8))] },
+      solution: fromInt(4),
+      difficulty: "easy" as const,
+      startingCoefficientSign: "negative" as const,
+      xOnLeft: true,
+    },
+  ]);
+  await page.goto("/");
+  await page.evaluate(
+    ([key, value]) => window.localStorage.setItem(key, value),
+    [ACTIVE_SESSION_KEY, JSON.stringify(session)] as const,
+  );
+  await page.goto("/play");
+  await page.getByRole("button", { name: "Begin" }).click();
+  await expect(page.getByTestId("rule-op-add")).toHaveCount(0);
+
+  // Wrong: x's coefficient here is negative, so "Yes" is incorrect.
+  await page.getByRole("button", { name: "Yes", exact: true }).click();
+  await expect(page.getByText(/^Wrong!?$/)).toHaveCount(0);
+  await expect(page.getByTestId("sign-check-feedback")).toContainText("negative");
+  await expect(page.getByTestId("rule-op-add")).toHaveCount(0);
+
+  // Correct: x really is negative, so step 1's RULE builder appears (not skipped).
+  await page.getByRole("button", { name: "No", exact: true }).click();
+  await expect(page.getByTestId("rule-op-add")).toBeVisible();
 });
 
 test("arcade scene reflows on the start screen at 320px with no horizontal scroll", async ({ page }) => {
